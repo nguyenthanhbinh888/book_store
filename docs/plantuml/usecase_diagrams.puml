@@ -1,0 +1,242 @@
+' ==============================================================================
+' DỰ ÁN: WEBSITE QUẢN LÝ VÀ KINH DOANH SÁCH TRỰC TUYẾN (BOOKSTORE MANAGEMENT)
+' MÃ NGUỒN PLANTUML CHO CÁC BIỂU ĐỒ USE CASE
+' Hướng dẫn sử dụng:
+' 1. Sao chép từng khối @startuml ... @enduml
+' 2. Dán vào trang https://www.plantuml.com/plantuml/uml hoặc https://planttext.com
+' 3. Xuất file PNG / SVG độ nét cao để chèn vào báo cáo Word
+' ==============================================================================
+
+' ==============================================================================
+' 2.4.1 BIỂU ĐỒ USE CASE TỔNG QUÁT (Hình 2.1)
+' ==============================================================================
+@startuml usecase_tong_quat
+title HÌNH 2.1: BIỂU ĐỒ USE CASE TỔNG QUÁT TOÀN HỆ THỐNG
+left to right direction
+
+' Cấu hình giao diện theo đúng phong cách chuẩn học thuật
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 13
+
+skinparam actor {
+    BorderColor #A80036
+    BackgroundColor #FEFECE
+}
+
+skinparam usecase {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+actor "Khách hàng\n(Customer)" as Customer
+actor "Quản trị viên\n(Admin)" as Admin
+actor "Hệ thống\n(System DB)" as System
+
+rectangle "Hệ thống Quản lý và Bán sách trực tuyến" {
+    
+    ' Nhóm Tài khoản & Xác thực
+    (Đăng ký tài khoản) as UC_Register
+    (Đăng nhập hệ thống) as UC_Login
+    (Quản lý hồ sơ cá nhân) as UC_Profile
+    
+    ' Nhóm Khách hàng (Storefront)
+    (Tìm kiếm và duyệt sách) as UC_Search
+    (Xem chi tiết sách) as UC_Detail
+    (Quản lý giỏ hàng) as UC_Cart
+    (Đặt hàng COD) as UC_Checkout
+    (Xem lịch sử đơn hàng) as UC_MyOrders
+    (Hủy đơn hàng chờ duyệt) as UC_CancelOrder
+    
+    ' Nhóm Quản trị (Admin)
+    (Xem Dashboard doanh thu) as UC_Dashboard
+    (Quản lý Danh mục, Tác giả, NXB) as UC_Category
+    (Quản lý Sách và Giá vốn) as UC_Books
+    (Quản lý và Duyệt đơn hàng) as UC_AdminOrders
+    (Lập và Xác nhận phiếu nhập) as UC_Receipt
+    (Tra cứu biến động kho) as UC_Inventory
+    (Quản lý khách hàng) as UC_Customers
+}
+
+' Liên kết của Khách hàng
+Customer --> UC_Register
+Customer --> UC_Login
+Customer --> UC_Profile
+Customer --> UC_Search
+Customer --> UC_Detail
+Customer --> UC_Cart
+Customer --> UC_Checkout
+Customer --> UC_MyOrders
+Customer --> UC_CancelOrder
+
+' Liên kết của Quản trị viên
+Admin --> UC_Login
+Admin --> UC_Profile
+Admin --> UC_Dashboard
+Admin --> UC_Category
+Admin --> UC_Books
+Admin --> UC_AdminOrders
+Admin --> UC_Receipt
+Admin --> UC_Inventory
+Admin --> UC_Customers
+
+' Liên kết tác động dữ liệu với Hệ thống
+UC_Checkout --> System : Trừ tồn kho & Ghi Log
+UC_CancelOrder --> System : Hoàn kho & Ghi Log
+UC_Receipt --> System : Tăng kho & Ghi Log
+UC_Dashboard --> System : Thống kê từ DB
+
+@enduml
+
+
+' ==============================================================================
+' 2.4.2 BIỂU ĐỒ USE CASE PHÂN HỆ QUẢN TRỊ VIÊN (Hình 2.2)
+' ==============================================================================
+@startuml usecase_admin
+title HÌNH 2.2: BIỂU ĐỒ USE CASE PHÂN HỆ QUẢN TRỊ (ADMIN)
+left to right direction
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 13
+
+skinparam actor {
+    BorderColor #A80036
+    BackgroundColor #FEFECE
+}
+
+skinparam usecase {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+actor "Quản trị viên\n(Admin)" as Admin
+actor "Hệ thống CSDL\n(System DB)" as System
+
+rectangle "Phân hệ Quản trị (Admin Portal)" {
+    (Đăng nhập Quản trị) as UC_AdminLogin
+    (Xem Dashboard doanh thu) as UC_ViewDashboard
+    
+    ' Quản lý danh mục & sách
+    (Quản lý Danh mục sách) as UC_ManageCategory
+    (Quản lý Tác giả và NXB) as UC_ManageAuthorPub
+    (Quản lý Sách) as UC_ManageBook
+    (Cập nhật giá vốn & giá bán) as UC_UpdatePrices
+    (Cảnh báo tồn kho thấp) as UC_LowStockAlert
+    
+    ' Quản lý đơn hàng
+    (Xem danh sách đơn hàng) as UC_ViewOrders
+    (Chuyển trạng thái đơn hàng) as UC_UpdateOrderStatus
+    (Hủy đơn hàng & Hoàn kho) as UC_AdminCancelOrder
+    
+    ' Quản lý nhập hàng & kho
+    (Lập phiếu nhập hàng) as UC_CreateReceipt
+    (Xác nhận nhập kho) as UC_ConfirmReceipt
+    (Tra cứu lịch sử biến động kho) as UC_ViewInventoryLogs
+    
+    ' Quản lý khách hàng
+    (Quản lý tài khoản khách hàng) as UC_ManageUsers
+}
+
+' Kết nối Admin với các Use Case
+Admin --> UC_AdminLogin
+Admin --> UC_ViewDashboard
+Admin --> UC_ManageCategory
+Admin --> UC_ManageAuthorPub
+Admin --> UC_ManageBook
+Admin --> UC_ViewOrders
+Admin --> UC_CreateReceipt
+Admin --> UC_ViewInventoryLogs
+Admin --> UC_ManageUsers
+
+' Quan hệ <<include>> và <<extend>>
+UC_UpdatePrices .> UC_ManageBook : <<extend>>
+UC_LowStockAlert .> UC_ViewDashboard : <<include>>
+UC_UpdateOrderStatus .> UC_ViewOrders : <<include>>
+UC_AdminCancelOrder .> UC_ViewOrders : <<extend>>
+UC_ConfirmReceipt .> UC_CreateReceipt : <<include>>
+
+' Tác động tới Hệ thống CSDL
+UC_AdminCancelOrder --> System : Hoàn kho (+Qty)
+UC_ConfirmReceipt --> System : Tăng kho (+Qty) & Ghi Log
+UC_ViewDashboard --> System : Truy vấn số liệu thực
+
+@enduml
+
+
+' ==============================================================================
+' 2.4.3 BIỂU ĐỒ USE CASE PHÂN HỆ KHÁCH HÀNG (Hình 2.3)
+' ==============================================================================
+@startuml usecase_customer
+title HÌNH 2.3: BIỂU ĐỒ USE CASE PHÂN HỆ KHÁCH HÀNG (CUSTOMER)
+left to right direction
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 13
+
+skinparam actor {
+    BorderColor #A80036
+    BackgroundColor #FEFECE
+}
+
+skinparam usecase {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+actor "Khách vãng lai\n(Guest)" as Guest
+actor "Khách hàng\n(Customer)" as Customer
+actor "Hệ thống CSDL\n(System DB)" as System
+
+' Khách hàng kế thừa khách vãng lai
+Guest <|-- Customer
+
+rectangle "Phân hệ Khách hàng (Storefront)" {
+    ' Dành cho cả khách vãng lai & khách hàng
+    (Đăng ký tài khoản) as UCC_Register
+    (Đăng nhập hệ thống) as UCC_Login
+    (Tìm kiếm sách) as UCC_Search
+    (Lọc sách theo Danh mục & Giá) as UCC_Filter
+    (Xem chi tiết sách) as UCC_Detail
+    (Quản lý giỏ hàng) as UCC_Cart
+    
+    ' Dành riêng cho Khách hàng đã đăng nhập
+    (Đặt hàng COD) as UCC_Checkout
+    (Xem lịch sử đơn mua) as UCC_MyOrders
+    (Xem chi tiết đơn hàng) as UCC_OrderDetail
+    (Hủy đơn hàng chờ duyệt) as UCC_CancelOrder
+    (Quản lý thông tin & Đổi MK) as UCC_Profile
+}
+
+' Liên kết của Khách vãng lai
+Guest --> UCC_Register
+Guest --> UCC_Login
+Guest --> UCC_Search
+Guest --> UCC_Filter
+Guest --> UCC_Detail
+Guest --> UCC_Cart
+
+' Liên kết của Khách hàng thành viên
+Customer --> UCC_Checkout
+Customer --> UCC_MyOrders
+Customer --> UCC_Profile
+
+' Quan hệ phụ thuộc
+UCC_Checkout .> UCC_Login : <<include>>
+UCC_Checkout .> UCC_Cart : <<include>>
+UCC_OrderDetail .> UCC_MyOrders : <<extend>>
+UCC_CancelOrder .> UCC_OrderDetail : <<extend>>
+UCC_Filter .> UCC_Search : <<extend>>
+
+' Tác động tới Hệ thống CSDL
+UCC_Checkout --> System : Kiểm tra giá, Trừ tồn kho & Tạo đơn
+UCC_CancelOrder --> System : Cập nhật CANCELLED & Hoàn kho
+
+@enduml

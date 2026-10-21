@@ -1,0 +1,356 @@
+' ==============================================================================
+' DỰ ÁN: WEBSITE QUẢN LÝ VÀ KINH DOANH SÁCH TRỰC TUYẾN (BOOKSTORE MANAGEMENT)
+' MÃ NGUỒN PLANTUML CHO CÁC BIỂU ĐỒ TRÌNH TỰ (SEQUENCE DIAGRAMS - MỤC 2.6.1)
+' Cấu trúc chuẩn BCE (Boundary - Control - Entity / Database) theo mẫu báo cáo
+' ==============================================================================
+
+' ==============================================================================
+' 2.6.1.1 Chức năng Xác thực người dùng (Login JWT) - Hình 2.7
+' ==============================================================================
+@startuml sequence_login
+title HÌNH 2.7: BIỂU ĐỒ TRÌNH TỰ CHỨC NĂNG ĐĂNG NHẬP HỆ THỐNG (JWT AUTHENTICATION)
+autonumber
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+
+skinparam sequence {
+    ArrowColor #A80036
+    ActorBorderColor #A80036
+    ActorBackgroundColor #FEFECE
+    LifeLineBorderColor #A80036
+    LifeLineBackgroundColor #FEFECE
+    ParticipantBorderColor #A80036
+    ParticipantBackgroundColor #FEFECE
+    BoxBorderColor #666666
+    BoxBackgroundColor #F9F9F9
+}
+
+actor "Người dùng\n(User)" as User
+boundary "Giao diện Đăng nhập\n(AuthPage / UI)" as UI
+control "AuthController" as Ctrl
+control "AuthenticationManager" as AuthMgr
+entity "UserRepository" as Repo
+database "MySQL Database" as DB
+
+activate User
+User -> UI: Nhập Email, Mật khẩu & Nhấn "Đăng nhập"
+activate UI
+
+UI -> Ctrl: POST /api/v1/auth/login (LoginRequest)
+activate Ctrl
+
+Ctrl -> AuthMgr: authenticate(UsernamePasswordAuthenticationToken)
+activate AuthMgr
+
+AuthMgr -> Repo: findByEmail(email)
+activate Repo
+
+Repo -> DB: SELECT * FROM users WHERE email = ?
+activate DB
+DB --> Repo: Dữ liệu bản ghi User
+deactivate DB
+
+Repo --> AuthMgr: Đối tượng UserDetails
+deactivate Repo
+
+AuthMgr -> AuthMgr: So khớp BCrypt.checkpw(password, user.password)
+AuthMgr --> Ctrl: Authentication (Xác thực thành công)
+deactivate AuthMgr
+
+Ctrl -> Ctrl: JwtTokenProvider.generateToken(user)
+Ctrl --> UI: HTTP 200 OK (AuthResponse: Token, UserInfo)
+deactivate Ctrl
+
+UI -> UI: Lưu Token vào LocalStorage & Cập nhật AuthContext
+UI --> User: Hiển thị thông báo thành công & Chuyển hướng trang
+deactivate UI
+deactivate User
+
+@enduml
+
+
+' ==============================================================================
+' 2.6.1.2 Chức năng Đặt hàng COD và trừ tồn kho - Hình 2.8
+' ==============================================================================
+@startuml sequence_order_cod
+title HÌNH 2.8: BIỂU ĐỒ TRÌNH TỰ CHỨC NĂNG ĐẶT HÀNG COD VÀ TRỪ TỒN KHO
+autonumber
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+
+skinparam sequence {
+    ArrowColor #A80036
+    ActorBorderColor #A80036
+    ActorBackgroundColor #FEFECE
+    LifeLineBorderColor #A80036
+    LifeLineBackgroundColor #FEFECE
+    ParticipantBorderColor #A80036
+    ParticipantBackgroundColor #FEFECE
+}
+
+actor "Khách hàng\n(Customer)" as Customer
+boundary "Giao diện Thanh toán\n(CheckoutPage / UI)" as UI
+control "OrderController" as Ctrl
+control "OrderService" as Svc
+entity "BookRepository" as BRepo
+entity "OrderRepository" as ORepo
+entity "InventoryTxRepository" as TxRepo
+database "MySQL Database" as DB
+
+activate Customer
+Customer -> UI: Nhập địa chỉ, SĐT & Bấm "Xác nhận đặt hàng"
+activate UI
+
+UI -> Ctrl: POST /api/v1/orders (CreateOrderRequest)
+activate Ctrl
+
+Ctrl -> Svc: createOrder(userId, request)
+activate Svc
+
+note over Svc: Bắt đầu giao dịch @Transactional (ACID)
+
+loop Duyệt từng cuốn sách trong giỏ hàng (items)
+    Svc -> BRepo: findById(bookId)
+    activate BRepo
+    BRepo -> DB: SELECT * FROM books WHERE id = ?
+    activate DB
+    DB --> BRepo: Dữ liệu sách (Book Entity)
+    deactivate DB
+    BRepo --> Svc: Book Entity
+    deactivate BRepo
+    Svc -> Svc: Kiểm tra tồn kho (stockQuantity >= quantity)
+    Svc -> Svc: Tính thành tiền = book.salePrice * item.quantity
+end
+
+Svc -> ORepo: save(Order & OrderDetails snapshot)
+activate ORepo
+ORepo -> DB: INSERT INTO orders & order_details
+activate DB
+DB --> ORepo: Đã lưu bản ghi
+deactivate DB
+ORepo --> Svc: Order Entity
+deactivate ORepo
+
+loop Cập nhật trừ tồn kho & Ghi vết kiểm toán
+    Svc -> BRepo: Giảm số lượng tồn (stockQuantity - quantity)
+    activate BRepo
+    BRepo -> DB: UPDATE books SET stock_quantity = ? WHERE id = ?
+    activate DB
+    DB --> BRepo: Cập nhật thành công
+    deactivate DB
+    deactivate BRepo
+    
+    Svc -> TxRepo: save(InventoryTransaction ORDER, -quantity)
+    activate TxRepo
+    TxRepo -> DB: INSERT INTO inventory_transactions
+    activate DB
+    DB --> TxRepo: Lưu nhật ký kho
+    deactivate DB
+    deactivate TxRepo
+end
+
+note over Svc: Commit Giao dịch thành công
+
+Svc --> Ctrl: OrderDTO (Mã đơn ORD-..., trạng thái PENDING)
+deactivate Svc
+
+Ctrl --> UI: HTTP 201 Created (OrderDTO)
+deactivate Ctrl
+
+UI -> UI: Xóa giỏ hàng trong LocalStorage (Clear Cart)
+UI --> Customer: Thông báo đặt hàng thành công & Chuyển sang Chi tiết đơn
+deactivate UI
+deactivate Customer
+
+@enduml
+
+
+' ==============================================================================
+' 2.6.1.3 Chức năng Hủy đơn hàng và hoàn trả tồn kho an toàn - Hình 2.9
+' ==============================================================================
+@startuml sequence_cancel_order
+title HÌNH 2.9: BIỂU ĐỒ TRÌNH TỰ CHỨC NĂNG HỦY ĐƠN HÀNG VÀ HOÀN TRẢ TỒN KHO
+autonumber
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+
+skinparam sequence {
+    ArrowColor #A80036
+    ActorBorderColor #A80036
+    ActorBackgroundColor #FEFECE
+    LifeLineBorderColor #A80036
+    LifeLineBackgroundColor #FEFECE
+    ParticipantBorderColor #A80036
+    ParticipantBackgroundColor #FEFECE
+}
+
+actor "Khách hàng\n(Customer)" as Customer
+boundary "Giao diện Chi tiết đơn\n(OrderDetailPage / UI)" as UI
+control "OrderController" as Ctrl
+control "OrderService" as Svc
+entity "OrderRepository" as ORepo
+entity "BookRepository" as BRepo
+entity "InventoryTxRepository" as TxRepo
+database "MySQL Database" as DB
+
+activate Customer
+Customer -> UI: Bấm nút "Hủy đơn hàng" & Xác nhận hủy
+activate UI
+
+UI -> Ctrl: POST /api/v1/orders/my/{id}/cancel
+activate Ctrl
+
+Ctrl -> Svc: cancelOrder(orderId, currentUserId)
+activate Svc
+
+note over Svc: Bắt đầu giao dịch @Transactional
+
+Svc -> ORepo: findById(orderId)
+activate ORepo
+ORepo -> DB: SELECT * FROM orders WHERE id = ?
+activate DB
+DB --> ORepo: Bản ghi Order & danh sách OrderDetails
+deactivate DB
+ORepo --> Svc: Order Entity
+deactivate ORepo
+
+Svc -> Svc: Kiểm tra quyền sở hữu đơn hàng (customer.id == currentUserId)
+Svc -> Svc: Kiểm tra trạng thái hiện tại (status == PENDING)
+
+Svc -> Svc: Cập nhật order.status = CANCELLED
+Svc -> ORepo: save(order)
+activate ORepo
+ORepo -> DB: UPDATE orders SET status = 'CANCELLED' WHERE id = ?
+activate DB
+DB --> ORepo: Đã cập nhật trạng thái
+deactivate DB
+deactivate ORepo
+
+loop Hoàn trả số lượng tồn kho từng cuốn sách
+    Svc -> BRepo: Tăng tồn kho (stockQuantity + detail.quantity)
+    activate BRepo
+    BRepo -> DB: UPDATE books SET stock_quantity = ? WHERE id = ?
+    activate DB
+    DB --> BRepo: Đã hoàn kho
+    deactivate DB
+    deactivate BRepo
+    
+    Svc -> TxRepo: save(InventoryTransaction ORDER_CANCEL, +quantity)
+    activate TxRepo
+    TxRepo -> DB: INSERT INTO inventory_transactions
+    activate DB
+    DB --> TxRepo: Đã ghi nhật ký hoàn kho
+    deactivate DB
+    deactivate TxRepo
+end
+
+note over Svc: Commit Giao dịch an toàn
+
+Svc --> Ctrl: OrderDTO (Trạng thái CANCELLED)
+deactivate Svc
+
+Ctrl --> UI: HTTP 200 OK (OrderDTO)
+deactivate Ctrl
+
+UI --> Customer: Thông báo hủy đơn thành công & Cập nhật Badge CANCELLED (Đỏ)
+deactivate UI
+deactivate Customer
+
+@enduml
+
+
+' ==============================================================================
+' 2.6.1.4 Chức năng Xác nhận phiếu nhập và tăng tồn kho - Hình 2.10
+' ==============================================================================
+@startuml sequence_purchase_receipt
+title HÌNH 2.10: BIỂU ĐỒ TRÌNH TỰ CHỨC NĂNG XÁC NHẬN PHIẾU NHẬP VÀ TĂNG TỒN KHO
+autonumber
+skinparam defaultFontName "Times New Roman"
+skinparam defaultFontSize 12
+skinparam shadowing false
+
+skinparam sequence {
+    ArrowColor #A80036
+    ActorBorderColor #A80036
+    ActorBackgroundColor #FEFECE
+    LifeLineBorderColor #A80036
+    LifeLineBackgroundColor #FEFECE
+    ParticipantBorderColor #A80036
+    ParticipantBackgroundColor #FEFECE
+}
+
+actor "Quản trị viên\n(Admin)" as Admin
+boundary "Giao diện Phiếu nhập\n(PurchaseReceiptPage / UI)" as UI
+control "PurchaseReceiptController" as Ctrl
+control "PurchaseReceiptService" as Svc
+entity "PurchaseReceiptRepository" as RecRepo
+entity "BookRepository" as BRepo
+entity "InventoryTxRepository" as TxRepo
+database "MySQL Database" as DB
+
+activate Admin
+Admin -> UI: Nhấn nút "Xác nhận nhập kho"
+activate UI
+
+UI -> Ctrl: POST /api/v1/admin/purchase-receipts/{id}/confirm
+activate Ctrl
+
+Ctrl -> Svc: confirmReceipt(receiptId, adminId)
+activate Svc
+
+note over Svc: Bắt đầu giao dịch @Transactional
+
+Svc -> RecRepo: findById(receiptId)
+activate RecRepo
+RecRepo -> DB: SELECT * FROM purchase_receipts WHERE id = ?
+activate DB
+DB --> RecRepo: Bản ghi PurchaseReceipt & Items
+deactivate DB
+RecRepo --> Svc: PurchaseReceipt Entity
+deactivate RecRepo
+
+Svc -> Svc: Kiểm tra trạng thái phiếu (status == DRAFT)
+Svc -> Svc: Cập nhật status = CONFIRMED, confirmedAt = NOW()
+
+Svc -> RecRepo: save(receipt)
+activate RecRepo
+RecRepo -> DB: UPDATE purchase_receipts SET status = 'CONFIRMED', confirmed_at = NOW()
+activate DB
+DB --> RecRepo: Đã cập nhật
+deactivate DB
+deactivate RecRepo
+
+loop Duyệt từng mặt hàng nhập kho (items)
+    Svc -> BRepo: Tăng tồn kho (stockQuantity + item.quantity)
+    activate BRepo
+    BRepo -> DB: UPDATE books SET stock_quantity = ? WHERE id = ?
+    activate DB
+    DB --> BRepo: Đã tăng tồn kho
+    deactivate DB
+    deactivate BRepo
+    
+    Svc -> TxRepo: save(InventoryTransaction PURCHASE_RECEIPT, +quantity)
+    activate TxRepo
+    TxRepo -> DB: INSERT INTO inventory_transactions
+    activate DB
+    DB --> TxRepo: Lưu nhật ký nhập kho
+    deactivate DB
+    deactivate TxRepo
+end
+
+note over Svc: Commit Giao dịch hoàn tất
+
+Svc --> Ctrl: PurchaseReceiptDTO (Trạng thái CONFIRMED)
+deactivate Svc
+
+Ctrl --> UI: HTTP 200 OK (PurchaseReceiptDTO)
+deactivate Ctrl
+
+UI --> Admin: Thông báo nhập kho thành công & Cập nhật số lượng tồn mới
+deactivate UI
+deactivate Admin
+
+@enduml
